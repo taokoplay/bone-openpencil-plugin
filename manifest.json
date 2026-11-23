@@ -1,0 +1,205 @@
+{
+  "schemaVersion": 1,
+  "id": "bone.openpencil",
+  "name": "Bone OpenPencil",
+  "version": "0.1.0",
+  "description": "Bone OpenPencil is a PI-Desktop port of ZSeven-W/dsh-openpencil for inspecting and editing OpenPencil .op design documents.",
+  "i18n": {
+    "en": {
+      "name": "Bone OpenPencil",
+      "description": "A PI-Desktop port of ZSeven-W/dsh-openpencil for inspecting and editing OpenPencil .op design documents.",
+      "safetyNotes": "Ported from ZSeven-W/dsh-openpencil. Reads and writes only workspace-relative .op files through the declared fs scope; no network or external process is used."
+    },
+    "zh-CN": {
+      "name": "Bone OpenPencil",
+      "description": "将 ZSeven-W/dsh-openpencil 移植到 PI-Desktop 的 Bone 插件，用于检查和编辑 OpenPencil .op 设计文档。",
+      "safetyNotes": "本插件移植自 ZSeven-W/dsh-openpencil；仅通过声明的文件权限读写工作区内的 .op 文件，不访问网络，也不启动外部进程。"
+    }
+  },
+  "author": "Bone",
+  "repository": "https://github.com/ZSeven-W/dsh-openpencil",
+  "homepage": "https://github.com/ZSeven-W/openpencil",
+  "icon": "icon.png",
+  "main": "main.js",
+  "contributes": {
+    "views": [
+      {
+        "id": "canvas",
+        "title": {
+          "en": "Bone OpenPencil Canvas",
+          "zh-CN": "Bone OpenPencil 画布"
+        },
+        "icon": "palette",
+        "entry": "views/index.html",
+        "order": 30
+      }
+    ],
+    "commands": [
+      {
+        "id": "bone.openpencil.open",
+        "title": "Bone OpenPencil: Open Canvas",
+        "keywords": [
+          "openpencil",
+          "canvas",
+          "design",
+          "op"
+        ],
+        "category": "Bone OpenPencil"
+      }
+    ],
+    "agentTools": [
+      {
+        "name": "openpencil_render",
+        "description": "Inspect an OpenPencil .op document and return its frame and node structure. The PI-Desktop port renders a faithful editable preview in its work panel; it does not claim pixel-export parity with the optional DSH native renderer.",
+        "risk": "low",
+        "planSafeActions": [
+          "inspect"
+        ],
+        "schema": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "action": {
+              "type": "string",
+              "enum": [
+                "inspect"
+              ]
+            },
+            "path": {
+              "type": "string",
+              "description": "Workspace-relative path to an existing .op file."
+            }
+          },
+          "required": [
+            "action",
+            "path"
+          ]
+        }
+      },
+      {
+        "name": "openpencil_selection",
+        "description": "Read one node from an OpenPencil .op document by id.",
+        "risk": "low",
+        "planSafeActions": [
+          "inspect"
+        ],
+        "schema": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "action": {
+              "type": "string",
+              "enum": [
+                "inspect"
+              ]
+            },
+            "path": {
+              "type": "string"
+            },
+            "nodeId": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "action",
+            "path",
+            "nodeId"
+          ]
+        }
+      },
+      {
+        "name": "openpencil_new",
+        "description": "Create a new OpenPencil .op document with one editable frame. Existing files are never overwritten.",
+        "risk": "high",
+        "schema": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "path": {
+              "type": "string",
+              "description": "Workspace-relative .op path that must not already exist."
+            },
+            "name": {
+              "type": "string"
+            },
+            "width": {
+              "type": "number"
+            },
+            "height": {
+              "type": "number"
+            },
+            "fill": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "path"
+          ]
+        }
+      },
+      {
+        "name": "openpencil_edit",
+        "description": "Apply bounded node updates or add/remove operations to an OpenPencil .op document and save it through PI-Desktop's workspace permission gate.",
+        "risk": "high",
+        "schema": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "path": {
+              "type": "string"
+            },
+            "nodeId": {
+              "type": "string"
+            },
+            "patch": {
+              "type": "object"
+            },
+            "operations": {
+              "type": "array",
+              "items": {
+                "type": "object"
+              }
+            }
+          },
+          "required": [
+            "path"
+          ]
+        }
+      }
+    ],
+    "skills": [
+      "skills/openpencil-design.md"
+    ]
+  },
+  "permissions": [
+    "ui.view",
+    "agent.tool.register",
+    "agent.prompt.inject",
+    "fs.read",
+    "fs.write"
+  ],
+  "fs": {
+    "read": {
+      "root": "workspace",
+      "scope": [
+        "*.op",
+        "**/*.op"
+      ]
+    },
+    "write": {
+      "root": "workspace",
+      "scope": [
+        "*.op",
+        "**/*.op"
+      ]
+    }
+  },
+  "engines": {
+    "piDesktop": ">=0.21.0"
+  },
+  "activationEvents": [
+    "onStartup",
+    "onCommand:bone.openpencil.open"
+  ],
+  "license": "MIT"
+}

@@ -1,0 +1,711 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="pi-plugin-chrome" content="v2" />
+    <title>Bone OpenPencil Canvas</title>
+    <style>
+      :root {
+        color-scheme: dark;
+        --bg: #17191d;
+        --surface: #1e2127;
+        --surface-raised: #252931;
+        --surface-hover: #2d323c;
+        --border: rgba(255, 255, 255, 0.09);
+        --border-strong: rgba(255, 255, 255, 0.16);
+        --fg: #f1f3f5;
+        --muted: #9ca3af;
+        --faint: #707784;
+        --accent: #b7f36b;
+        --accent-ink: #19210d;
+        --danger: #ff8e8e;
+        --shadow: 0 16px 42px rgba(0, 0, 0, 0.25);
+        font: 12px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+      }
+      :root[data-base="light"] {
+        color-scheme: light;
+        --bg: #f4f5f7;
+        --surface: #ffffff;
+        --surface-raised: #fafafa;
+        --surface-hover: #eceff2;
+        --border: rgba(20, 24, 30, 0.1);
+        --border-strong: rgba(20, 24, 30, 0.18);
+        --fg: #20242a;
+        --muted: #626a75;
+        --faint: #9199a4;
+        --accent: #5f8b18;
+        --accent-ink: #ffffff;
+        --danger: #b34b4b;
+        --shadow: 0 16px 42px rgba(20, 24, 30, 0.12);
+      }
+      * { box-sizing: border-box; }
+      html, body { height: 100%; margin: 0; background: var(--bg); color: var(--fg); }
+      body { padding-top: var(--pi-plugin-titlebar-height, 0px); overflow: hidden; }
+      button, input, textarea, select { font: inherit; color: inherit; }
+      button { border: 0; cursor: pointer; }
+      button:disabled, input:disabled, textarea:disabled { opacity: 0.42; cursor: default; }
+      button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-visible {
+        outline: 2px solid color-mix(in oklab, var(--accent) 64%, transparent);
+        outline-offset: 1px;
+      }
+      .app { display: flex; flex-direction: column; height: 100%; min-height: 0; }
+      .toolbar {
+        display: flex; align-items: center; gap: 12px; min-height: 52px; padding: 8px 12px;
+        border-bottom: 1px solid var(--border); background: var(--surface); flex: 0 0 auto;
+      }
+      .brand { display: flex; align-items: center; gap: 9px; min-width: 185px; }
+      .brand-mark {
+        display: grid; place-items: center; width: 30px; height: 30px; border-radius: 9px;
+        color: var(--accent-ink); background: var(--accent); font-size: 10px; font-weight: 800;
+        letter-spacing: -0.04em; box-shadow: 0 3px 12px color-mix(in oklab, var(--accent) 25%, transparent);
+      }
+      .brand-copy { min-width: 0; }
+      .brand-copy strong { display: block; font-size: 13px; letter-spacing: -0.01em; }
+      .brand-copy small { display: block; max-width: 230px; overflow: hidden; color: var(--muted); text-overflow: ellipsis; white-space: nowrap; }
+      .toolbar-spacer { flex: 1; }
+      .toolbar-actions, .zoom-actions { display: inline-flex; align-items: center; gap: 4px; }
+      .button {
+        display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-height: 28px;
+        padding: 0 9px; border: 1px solid transparent; border-radius: 7px; background: transparent; color: var(--muted);
+      }
+      .button:hover:not(:disabled) { background: var(--surface-hover); color: var(--fg); }
+      .button.primary { background: var(--accent); color: var(--accent-ink); font-weight: 700; }
+      .button.primary:hover:not(:disabled) { filter: brightness(1.08); }
+      .button.icon { width: 28px; padding: 0; }
+      .button.small { min-height: 25px; padding: 0 7px; font-size: 11px; }
+      .button[aria-pressed="true"] { background: var(--surface-hover); color: var(--fg); }
+      .main { display: grid; grid-template-columns: 218px minmax(0, 1fr) 236px; flex: 1; min-height: 0; }
+      .sidebar, .inspector { min-width: 0; background: var(--surface); }
+      .sidebar { border-right: 1px solid var(--border); display: flex; flex-direction: column; }
+      .inspector { border-left: 1px solid var(--border); overflow: auto; }
+      .pane-header {
+        display: flex; align-items: center; justify-content: space-between; gap: 6px; min-height: 42px;
+        padding: 0 10px; border-bottom: 1px solid var(--border); color: var(--muted);
+      }
+      .pane-title { display: flex; align-items: baseline; gap: 6px; min-width: 0; }
+      .pane-title strong { color: var(--fg); font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; }
+      .pane-title span { color: var(--faint); font-size: 11px; }
+      .file-list { flex: 1; min-height: 0; overflow: auto; padding: 6px; }
+      .file-item {
+        display: flex; align-items: center; width: 100%; min-height: 32px; gap: 8px; padding: 0 8px; border-radius: 7px;
+        background: transparent; color: var(--muted); text-align: left;
+      }
+      .file-item:hover { background: var(--surface-hover); color: var(--fg); }
+      .file-item.active { background: color-mix(in oklab, var(--accent) 16%, var(--surface)); color: var(--fg); }
+      .file-glyph { color: var(--accent); font-size: 10px; font-weight: 800; }
+      .file-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+      .file-empty, .canvas-empty { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 7px; padding: 28px 18px; color: var(--muted); text-align: center; }
+      .file-empty { flex: 1; }
+      .file-empty strong, .canvas-empty strong { color: var(--fg); font-size: 13px; }
+      .file-empty p, .canvas-empty p { max-width: 230px; margin: 0; }
+      .canvas-pane { display: flex; flex-direction: column; min-width: 0; min-height: 0; background: var(--bg); }
+      .canvas-header { display: flex; align-items: center; gap: 10px; min-height: 42px; padding: 0 12px; border-bottom: 1px solid var(--border); }
+      .document-title { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--fg); font-weight: 650; }
+      .document-meta { color: var(--muted); white-space: nowrap; }
+      .dirty-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--accent); opacity: 0; }
+      .dirty-dot.visible { opacity: 1; }
+      .stage {
+        position: relative; flex: 1; min-height: 0; overflow: auto; display: grid; place-items: center; padding: 34px;
+        background-color: var(--bg);
+        background-image: radial-gradient(color-mix(in oklab, var(--fg) 10%, transparent) 0.65px, transparent 0.65px);
+        background-size: 16px 16px;
+      }
+      .stage svg { display: block; min-width: 240px; min-height: 160px; max-width: none; max-height: none; overflow: visible; filter: drop-shadow(var(--shadow)); transform-origin: center; }
+      .stage svg .node { cursor: pointer; }
+      .stage svg .node:hover > .node-outline { stroke: color-mix(in oklab, var(--accent) 82%, white); stroke-width: 2; }
+      .stage svg .selected > .node-outline { stroke: var(--accent); stroke-width: 2.5; stroke-dasharray: 5 3; }
+      .stage svg .node-outline { fill: none; pointer-events: none; }
+      .stage svg text { pointer-events: none; user-select: none; }
+      .canvas-empty { position: absolute; inset: 0; }
+      .canvas-empty[hidden], .file-empty[hidden], .inspector-empty[hidden], .editor-fields[hidden] { display: none; }
+      .inspector-section { padding: 12px; border-bottom: 1px solid var(--border); }
+      .inspector-section h2 { margin: 0 0 9px; color: var(--muted); font-size: 10px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; }
+      .inspector-empty { padding: 22px 14px; color: var(--muted); }
+      .field { display: grid; grid-template-columns: 68px minmax(0, 1fr); align-items: center; gap: 8px; min-height: 30px; }
+      .field + .field { margin-top: 5px; }
+      .field label { color: var(--muted); font-size: 11px; }
+      .field input, .field textarea {
+        width: 100%; min-width: 0; padding: 5px 7px; border: 1px solid var(--border); border-radius: 6px; background: var(--surface-raised); color: var(--fg);
+      }
+      .field textarea { min-height: 62px; resize: vertical; }
+      .field input[readonly] { color: var(--faint); }
+      .stat-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; }
+      .stat { padding: 8px; border: 1px solid var(--border); border-radius: 7px; background: var(--surface-raised); }
+      .stat small { display: block; color: var(--muted); }
+      .stat strong { display: block; margin-top: 2px; color: var(--fg); font-size: 14px; }
+      .statusbar { display: flex; align-items: center; min-height: 25px; padding: 0 10px; border-top: 1px solid var(--border); color: var(--muted); background: var(--surface); }
+      .statusbar.error { color: var(--danger); }
+      dialog { width: min(390px, calc(100vw - 32px)); padding: 0; border: 1px solid var(--border-strong); border-radius: 12px; background: var(--surface); color: var(--fg); box-shadow: var(--shadow); }
+      dialog::backdrop { background: rgba(0, 0, 0, 0.42); }
+      .dialog-body { padding: 16px; }
+      .dialog-body h2 { margin: 0 0 4px; font-size: 15px; }
+      .dialog-body p { margin: 0 0 14px; color: var(--muted); }
+      .dialog-field { display: grid; gap: 5px; margin-top: 10px; }
+      .dialog-field label { color: var(--muted); font-size: 11px; }
+      .dialog-field input { padding: 7px 8px; border: 1px solid var(--border); border-radius: 7px; background: var(--surface-raised); }
+      .dialog-actions { display: flex; justify-content: flex-end; gap: 7px; margin-top: 16px; }
+      @media (max-width: 840px) {
+        .main { grid-template-columns: 180px minmax(0, 1fr); }
+        .inspector { display: none; }
+        .brand { min-width: 145px; }
+      }
+      @media (max-width: 580px) {
+        .main { grid-template-columns: minmax(0, 1fr); }
+        .sidebar { display: none; }
+        .toolbar-actions .button-label { display: none; }
+        .brand-copy small { max-width: 120px; }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="app">
+      <header class="toolbar">
+        <div class="brand">
+          <div class="brand-mark" aria-hidden="true">OP</div>
+          <div class="brand-copy">
+            <strong id="brand-title">Bone OpenPencil</strong>
+            <small id="workspace-label">No workspace</small>
+          </div>
+        </div>
+        <div class="toolbar-spacer"></div>
+        <div class="toolbar-actions">
+          <button class="button" id="new-button" type="button"><span aria-hidden="true">＋</span><span class="button-label" data-copy="new">New</span></button>
+          <button class="button" id="save-button" type="button" disabled><span aria-hidden="true">↥</span><span class="button-label" data-copy="save">Save</span></button>
+          <button class="button icon" id="fit-button" type="button" title="Fit" aria-label="Fit">⌗</button>
+          <button class="button icon" id="zoom-out" type="button" title="Zoom out" aria-label="Zoom out">−</button>
+          <button class="button small" id="zoom-label" type="button" aria-label="Reset zoom">100%</button>
+          <button class="button icon" id="zoom-in" type="button" title="Zoom in" aria-label="Zoom in">＋</button>
+        </div>
+      </header>
+      <div class="main">
+        <aside class="sidebar">
+          <div class="pane-header">
+            <div class="pane-title"><strong id="files-title">Documents</strong><span id="file-count">0</span></div>
+            <button class="button icon small" id="refresh-button" type="button" title="Refresh" aria-label="Refresh">↻</button>
+          </div>
+          <div class="file-list" id="file-list"></div>
+          <div class="file-empty" id="file-empty" hidden>
+            <strong id="file-empty-title">No .op files</strong>
+            <p id="file-empty-body">Create a document or ask the Agent to create one.</p>
+          </div>
+        </aside>
+        <main class="canvas-pane">
+          <div class="canvas-header">
+            <span class="dirty-dot" id="dirty-dot" aria-label="Unsaved changes"></span>
+            <strong class="document-title" id="document-title">Bone OpenPencil Canvas</strong>
+            <span class="document-meta" id="document-meta"></span>
+          </div>
+          <div class="stage" id="stage">
+            <div class="canvas-empty" id="canvas-empty">
+              <strong id="canvas-empty-title">Choose an .op document</strong>
+              <p id="canvas-empty-body">Open a workspace document to inspect its frames and edit node properties.</p>
+            </div>
+            <svg id="canvas" xmlns="http://www.w3.org/2000/svg" aria-label="Bone OpenPencil canvas" hidden></svg>
+          </div>
+        </main>
+        <aside class="inspector">
+          <div class="pane-header"><div class="pane-title"><strong id="inspector-title">Inspector</strong></div></div>
+          <div class="inspector-empty" id="inspector-empty">Select a node on the canvas to inspect it.</div>
+          <div class="editor-fields" id="editor-fields" hidden>
+            <section class="inspector-section">
+              <h2 id="node-section-title">Node</h2>
+              <div class="field"><label for="node-id" data-copy="id">ID</label><input id="node-id" readonly /></div>
+              <div class="field"><label for="node-type" data-copy="type">Type</label><input id="node-type" readonly /></div>
+              <div class="field"><label for="node-name" data-copy="name">Name</label><input id="node-name" /></div>
+              <div class="field"><label for="node-content" data-copy="content">Text</label><textarea id="node-content"></textarea></div>
+            </section>
+            <section class="inspector-section">
+              <h2 id="geometry-section-title">Geometry</h2>
+              <div class="field"><label for="node-x">X</label><input id="node-x" type="number" step="1" /></div>
+              <div class="field"><label for="node-y">Y</label><input id="node-y" type="number" step="1" /></div>
+              <div class="field"><label for="node-width" data-copy="width">Width</label><input id="node-width" type="number" min="0" step="1" /></div>
+              <div class="field"><label for="node-height" data-copy="height">Height</label><input id="node-height" type="number" min="0" step="1" /></div>
+            </section>
+            <section class="inspector-section">
+              <h2 id="appearance-section-title">Appearance</h2>
+              <div class="field"><label for="node-fill" data-copy="fill">Fill</label><input id="node-fill" placeholder="#ffffff" /></div>
+              <div class="field"><label for="node-opacity" data-copy="opacity">Opacity</label><input id="node-opacity" type="number" min="0" max="1" step="0.05" /></div>
+            </section>
+          </div>
+          <section class="inspector-section" id="document-stats" hidden>
+            <h2 id="stats-title">Document</h2>
+            <div class="stat-grid">
+              <div class="stat"><small id="frames-label">Frames</small><strong id="frames-value">0</strong></div>
+              <div class="stat"><small id="nodes-label">Nodes</small><strong id="nodes-value">0</strong></div>
+            </div>
+          </section>
+        </aside>
+      </div>
+      <footer class="statusbar" id="statusbar"><span id="status-text">Ready</span></footer>
+    </div>
+
+    <dialog id="new-dialog">
+      <form method="dialog" id="new-form">
+        <div class="dialog-body">
+          <h2 id="new-dialog-title">New Bone OpenPencil document</h2>
+          <p id="new-dialog-body">Create a workspace-relative .op file with one frame.</p>
+          <div class="dialog-field"><label for="new-path" id="new-path-label">Path</label><input id="new-path" value="design.op" required /></div>
+          <div class="dialog-field"><label for="new-name" id="new-name-label">Frame name</label><input id="new-name" value="New frame" required /></div>
+          <div class="dialog-field"><label for="new-width" id="new-width-label">Width</label><input id="new-width" value="1440" type="number" min="1" /></div>
+          <div class="dialog-field"><label for="new-height" id="new-height-label">Height</label><input id="new-height" value="900" type="number" min="1" /></div>
+          <div class="dialog-actions"><button class="button" value="cancel" type="button" id="new-cancel">Cancel</button><button class="button primary" value="default" type="submit" id="new-submit">Create</button></div>
+        </div>
+      </form>
+    </dialog>
+
+    <script>
+      "use strict";
+
+      const bridge = window.pluginBridge;
+      const state = {
+        workspace: null,
+        workspacePath: null,
+        files: [],
+        path: null,
+        document: null,
+        summary: null,
+        selectedNodeId: null,
+        dirty: false,
+        zoom: 1,
+        locale: "en",
+      };
+
+      const copy = {
+        en: {
+          brand: "Bone OpenPencil",
+          documents: "Documents",
+          refresh: "Refresh",
+          new: "New",
+          save: "Save",
+          noWorkspace: "No workspace",
+          noFiles: "No .op files",
+          noFilesBody: "Create a document or ask the Agent to create one.",
+          choose: "Choose an .op document",
+          chooseBody: "Open a workspace document to inspect its frames and edit node properties.",
+          inspector: "Inspector",
+          inspectorEmpty: "Select a node on the canvas to inspect it.",
+          node: "Node",
+          geometry: "Geometry",
+          appearance: "Appearance",
+          document: "Document",
+          frames: "Frames",
+          nodes: "Nodes",
+          id: "ID",
+          type: "Type",
+          name: "Name",
+          content: "Text",
+          width: "Width",
+          height: "Height",
+          fill: "Fill",
+          opacity: "Opacity",
+          ready: "Ready",
+          loading: "Loading…",
+          saved: "Saved",
+          unsaved: "Unsaved changes",
+          newTitle: "New Bone OpenPencil document",
+          newBody: "Create a workspace-relative .op file with one frame.",
+          path: "Path",
+          frameName: "Frame name",
+          cancel: "Cancel",
+          create: "Create",
+          failed: "Bone OpenPencil error",
+          confirmDiscard: "Discard unsaved changes?",
+        },
+        zh: {
+          brand: "Bone OpenPencil",
+          documents: "文档",
+          refresh: "刷新",
+          new: "新建",
+          save: "保存",
+          noWorkspace: "没有打开的工作区",
+          noFiles: "没有 .op 文件",
+          noFilesBody: "创建文档，或让 Agent 创建一个文档。",
+          choose: "选择一个 .op 文档",
+          chooseBody: "打开工作区文档，检查画板并编辑节点属性。",
+          inspector: "检查器",
+          inspectorEmpty: "在画布上选择节点以查看属性。",
+          node: "节点",
+          geometry: "几何",
+          appearance: "外观",
+          document: "文档",
+          frames: "画板",
+          nodes: "节点",
+          id: "ID",
+          type: "类型",
+          name: "名称",
+          content: "文本",
+          width: "宽度",
+          height: "高度",
+          fill: "填充",
+          opacity: "不透明度",
+          ready: "就绪",
+          loading: "加载中…",
+          saved: "已保存",
+          unsaved: "有未保存更改",
+          newTitle: "新建 Bone OpenPencil 文档",
+          newBody: "在工作区内创建一个包含单个画板的 .op 文件。",
+          path: "路径",
+          frameName: "画板名称",
+          cancel: "取消",
+          create: "创建",
+          failed: "Bone OpenPencil 错误",
+          confirmDiscard: "放弃未保存的更改？",
+        },
+      };
+
+      const $ = (id) => document.getElementById(id);
+      const text = (key) => copy[state.locale]?.[key] ?? copy.en[key] ?? key;
+      const isZh = (appearance) => String(appearance?.locale ?? navigator.language).toLowerCase().startsWith("zh");
+
+      function setStatus(message, error = false) {
+        $("status-text").textContent = message;
+        $("statusbar").classList.toggle("error", error);
+      }
+
+      function applyCopy(appearance) {
+        if (appearance) {
+          state.locale = isZh(appearance) ? "zh" : "en";
+          document.documentElement.dataset.base = appearance.base === "light" ? "light" : "dark";
+        }
+        document.documentElement.lang = state.locale === "zh" ? "zh-CN" : "en";
+        $("brand-title").textContent = text("brand");
+        $("files-title").textContent = text("documents");
+        $("refresh-button").title = text("refresh");
+        $("refresh-button").setAttribute("aria-label", text("refresh"));
+        $("new-button").querySelector(".button-label").textContent = text("new");
+        $("save-button").querySelector(".button-label").textContent = text("save");
+        $("inspector-title").textContent = text("inspector");
+        $("inspector-empty").textContent = text("inspectorEmpty");
+        $("node-section-title").textContent = text("node");
+        $("geometry-section-title").textContent = text("geometry");
+        $("appearance-section-title").textContent = text("appearance");
+        $("stats-title").textContent = text("document");
+        $("frames-label").textContent = text("frames");
+        $("nodes-label").textContent = text("nodes");
+        $("file-empty-title").textContent = text("noFiles");
+        $("file-empty-body").textContent = text("noFilesBody");
+        $("canvas-empty-title").textContent = text("choose");
+        $("canvas-empty-body").textContent = text("chooseBody");
+        $("new-dialog-title").textContent = text("newTitle");
+        $("new-dialog-body").textContent = text("newBody");
+        $("new-path-label").textContent = text("path");
+        $("new-name-label").textContent = text("frameName");
+        $("new-cancel").textContent = text("cancel");
+        $("new-submit").textContent = text("create");
+        document.querySelectorAll("[data-copy]").forEach((element) => { element.textContent = text(element.dataset.copy); });
+        if (!state.path) setStatus(text("ready"));
+      }
+
+      async function invoke(channel, payload = {}) {
+        const result = await bridge.invoke(channel, payload);
+        if (result?.ok === false) throw new Error(`[${result.code}] ${result.message}`);
+        return result;
+      }
+
+      function confirmDiscard() {
+        return !state.dirty || window.confirm(text("confirmDiscard"));
+      }
+
+      function setWorkspace(workspace) {
+        state.workspace = workspace;
+        state.workspacePath = workspace?.path ?? null;
+        $("workspace-label").textContent = workspace?.path ?? text("noWorkspace");
+      }
+
+      async function loadWorkspace() {
+        try {
+          const workspace = await invoke("op.workspace");
+          setWorkspace(workspace);
+          await refreshFiles();
+        } catch (error) {
+          setWorkspace(null);
+          state.files = [];
+          state.document = null;
+          state.path = null;
+          renderFiles();
+          renderDocument();
+          setStatus(error instanceof Error ? error.message : String(error), true);
+        }
+      }
+
+      async function refreshFiles() {
+        if (!state.workspacePath) return;
+        setStatus(text("loading"));
+        try {
+          const result = await invoke("op.list", { workspacePath: state.workspacePath });
+          state.files = Array.isArray(result.files) ? result.files : [];
+          renderFiles();
+          if (state.path && !state.files.includes(state.path)) {
+            state.path = null;
+            state.document = null;
+            state.summary = null;
+            state.selectedNodeId = null;
+            state.dirty = false;
+          }
+          renderDocument();
+          setStatus(text("ready"));
+        } catch (error) {
+          setStatus(error instanceof Error ? error.message : String(error), true);
+        }
+      }
+
+      function renderFiles() {
+        const list = $("file-list");
+        list.replaceChildren();
+        $("file-count").textContent = String(state.files.length);
+        $("file-empty").hidden = state.files.length > 0;
+        for (const path of state.files) {
+          const button = document.createElement("button");
+          button.type = "button";
+          button.className = `file-item${path === state.path ? " active" : ""}`;
+          button.title = path;
+          button.innerHTML = '<span class="file-glyph">OP</span><span class="file-name"></span>';
+          button.querySelector(".file-name").textContent = path;
+          button.addEventListener("click", () => openDocument(path));
+          list.append(button);
+        }
+      }
+
+      async function openDocument(path) {
+        if (!confirmDiscard()) return;
+        if (!state.workspacePath) return;
+        try {
+          setStatus(text("loading"));
+          const result = await invoke("op.read", { path, workspacePath: state.workspacePath });
+          state.path = result.path;
+          state.document = result.document;
+          state.summary = result.summary;
+          state.selectedNodeId = null;
+          state.dirty = false;
+          renderFiles();
+          renderDocument();
+          setStatus(text("ready"));
+        } catch (error) {
+          setStatus(error instanceof Error ? error.message : String(error), true);
+        }
+      }
+
+      function safeColor(value, fallback) {
+        if (typeof value !== "string") return fallback;
+        const color = value.trim();
+        return /^#[0-9a-f]{3,8}$/i.test(color) ? color : fallback;
+      }
+
+      function nodeFill(node) {
+        if (typeof node.fill === "string") return safeColor(node.fill, "#e6e9ed");
+        if (Array.isArray(node.fill)) {
+          const solid = node.fill.find((paint) => paint && paint.type === "solid");
+          if (solid) return safeColor(solid.color, "#e6e9ed");
+        }
+        return safeColor(node.backgroundColor, "#e6e9ed");
+      }
+
+      function textContent(node) {
+        return typeof node.content === "string" ? node.content : typeof node.text === "string" ? node.text : node.name || "";
+      }
+
+      function nodeBounds(node) {
+        return {
+          x: Number.isFinite(node.x) ? node.x : 0,
+          y: Number.isFinite(node.y) ? node.y : 0,
+          width: Math.max(0, Number.isFinite(node.width) ? node.width : 0),
+          height: Math.max(0, Number.isFinite(node.height) ? node.height : 0),
+        };
+      }
+
+      function svgElement(name, attributes = {}) {
+        const element = document.createElementNS("http://www.w3.org/2000/svg", name);
+        for (const [key, value] of Object.entries(attributes)) element.setAttribute(key, String(value));
+        return element;
+      }
+
+      function renderNode(node, depth = 0) {
+        if (node.visible === false) return null;
+        const bounds = nodeBounds(node);
+        const group = svgElement("g", { class: `node${node.id === state.selectedNodeId ? " selected" : ""}`, transform: `translate(${bounds.x} ${bounds.y})`, opacity: Number.isFinite(node.opacity) ? node.opacity : 1 });
+        group.dataset.nodeId = node.id;
+        const type = String(node.type || "frame").toLowerCase();
+        const fill = nodeFill(node);
+        if (type === "ellipse") {
+          group.append(svgElement("ellipse", { class: "node-shape", cx: bounds.width / 2, cy: bounds.height / 2, rx: bounds.width / 2, ry: bounds.height / 2, fill }));
+        } else if (type === "text") {
+          const textNode = svgElement("text", { class: "node-shape", x: 0, y: Math.max(14, Number(node.fontSize) || 16), fill: safeColor(node.color, "#20242a"), "font-size": Number(node.fontSize) || 16, "font-family": typeof node.fontFamily === "string" ? node.fontFamily : "system-ui, sans-serif" });
+          textNode.textContent = textContent(node);
+          group.append(textNode);
+        } else if (type === "line") {
+          group.append(svgElement("line", { class: "node-shape", x1: 0, y1: 0, x2: bounds.width, y2: bounds.height, stroke: safeColor(node.stroke, "#667085"), "stroke-width": Number(node.strokeWidth) || 1 }));
+        } else {
+          group.append(svgElement("rect", { class: "node-shape", x: 0, y: 0, width: bounds.width, height: bounds.height, rx: Number(node.cornerRadius) || (depth === 0 ? 12 : 4), fill }));
+          if (type === "image" || type === "icon_font") {
+            const placeholder = svgElement("text", { x: bounds.width / 2, y: bounds.height / 2 + 4, "text-anchor": "middle", fill: "#667085", "font-size": Math.max(10, Math.min(16, Math.min(bounds.width, bounds.height) / 3)) });
+            placeholder.textContent = type === "image" ? "image" : "icon";
+            group.append(placeholder);
+          }
+        }
+        group.append(svgElement("rect", { class: "node-outline", x: 0, y: 0, width: bounds.width, height: bounds.height, rx: Number(node.cornerRadius) || (depth === 0 ? 12 : 4) }));
+        if (Array.isArray(node.children)) {
+          for (const child of node.children) {
+            const childElement = renderNode(child, depth + 1);
+            if (childElement) group.append(childElement);
+          }
+        }
+        group.addEventListener("click", (event) => {
+          event.stopPropagation();
+          state.selectedNodeId = node.id;
+          renderDocument();
+        });
+        return group;
+      }
+
+      function renderDocument() {
+        const canvas = $("canvas");
+        const empty = $("canvas-empty");
+        const stats = $("document-stats");
+        $("document-title").textContent = state.path || text("choose");
+        $("document-meta").textContent = state.summary ? `${state.summary.frameCount} ${text("frames").toLowerCase()} · ${state.summary.nodeCount} ${text("nodes").toLowerCase()}` : "";
+        $("dirty-dot").classList.toggle("visible", state.dirty);
+        $("save-button").disabled = !state.document || !state.dirty;
+        empty.hidden = Boolean(state.document);
+        canvas.hidden = !state.document;
+        stats.hidden = !state.summary;
+        if (!state.document || !state.summary) {
+          $("frames-value").textContent = "0";
+          $("nodes-value").textContent = "0";
+          renderInspector();
+          return;
+        }
+        $("frames-value").textContent = String(state.summary.frameCount);
+        $("nodes-value").textContent = String(state.summary.nodeCount);
+        canvas.replaceChildren();
+        const roots = Array.isArray(state.document.children) ? state.document.children : [];
+        const bounds = roots.map(nodeBounds);
+        const minX = Math.min(0, ...bounds.map((item) => item.x));
+        const minY = Math.min(0, ...bounds.map((item) => item.y));
+        const maxX = Math.max(1, ...bounds.map((item) => item.x + item.width));
+        const maxY = Math.max(1, ...bounds.map((item) => item.y + item.height));
+        canvas.setAttribute("viewBox", `${minX} ${minY} ${Math.max(1, maxX - minX)} ${Math.max(1, maxY - minY)}`);
+        canvas.style.width = `${Math.max(240, maxX - minX)}px`;
+        canvas.style.height = `${Math.max(160, maxY - minY)}px`;
+        canvas.style.transform = `scale(${state.zoom})`;
+        for (const node of roots) {
+          const element = renderNode(node);
+          if (element) canvas.append(element);
+        }
+        canvas.addEventListener("click", () => { state.selectedNodeId = null; renderDocument(); }, { once: true });
+        $("zoom-label").textContent = `${Math.round(state.zoom * 100)}%`;
+        renderInspector();
+      }
+
+      function findNode(documentValue, nodeId) {
+        if (!documentValue || !nodeId) return null;
+        const queue = [...(Array.isArray(documentValue.children) ? documentValue.children : [])];
+        while (queue.length) {
+          const node = queue.shift();
+          if (node.id === nodeId) return node;
+          if (Array.isArray(node.children)) queue.push(...node.children);
+        }
+        return null;
+      }
+
+      const fieldMap = {
+        name: $("node-name"), content: $("node-content"), x: $("node-x"), y: $("node-y"), width: $("node-width"), height: $("node-height"), fill: $("node-fill"), opacity: $("node-opacity"),
+      };
+
+      function renderInspector() {
+        const node = findNode(state.document, state.selectedNodeId);
+        $("inspector-empty").hidden = Boolean(node);
+        $("editor-fields").hidden = !node;
+        if (!node) return;
+        $("node-id").value = node.id || "";
+        $("node-type").value = node.type || "";
+        for (const [key, input] of Object.entries(fieldMap)) {
+          if (key === "content") input.value = typeof node.content === "string" ? node.content : "";
+          else if (key === "fill") input.value = typeof node.fill === "string" ? node.fill : Array.isArray(node.fill) ? (node.fill.find((paint) => paint?.type === "solid")?.color || "") : "";
+          else input.value = node[key] ?? "";
+        }
+      }
+
+      function patchSelected(key, value) {
+        const node = findNode(state.document, state.selectedNodeId);
+        if (!node) return;
+        if (["x", "y", "width", "height", "opacity"].includes(key)) {
+          const numeric = Number(value);
+          if (!Number.isFinite(numeric)) return;
+          node[key] = numeric;
+        } else if (key === "fill") {
+          node.fill = [{ type: "solid", color: value }];
+        } else {
+          node[key] = value;
+        }
+        state.dirty = true;
+        renderDocument();
+      }
+
+      for (const [key, input] of Object.entries(fieldMap)) {
+        input.addEventListener(key === "content" ? "input" : "change", () => patchSelected(key, input.value));
+      }
+
+      async function saveDocument() {
+        if (!state.document || !state.path || !state.workspacePath) return;
+        try {
+          setStatus(text("loading"));
+          const result = await invoke("op.write", { path: state.path, document: state.document, workspacePath: state.workspacePath });
+          state.document = result.document;
+          state.summary = result.summary;
+          state.dirty = false;
+          renderDocument();
+          setStatus(text("saved"));
+        } catch (error) {
+          setStatus(error instanceof Error ? error.message : String(error), true);
+        }
+      }
+
+      function openNewDialog() {
+        if (!confirmDiscard()) return;
+        $("new-dialog").showModal();
+        $("new-path").focus();
+        $("new-path").select();
+      }
+
+      async function createNewDocument(event) {
+        event.preventDefault();
+        if (!state.workspacePath) return;
+        const form = event.currentTarget;
+        const path = $("new-path").value.trim();
+        const name = $("new-name").value.trim();
+        const width = Number($("new-width").value);
+        const height = Number($("new-height").value);
+        try {
+          setStatus(text("loading"));
+          const result = await invoke("op.create", { path, name, width, height, workspacePath: state.workspacePath });
+          $("new-dialog").close();
+          await refreshFiles();
+          await openDocument(result.path);
+        } catch (error) {
+          setStatus(error instanceof Error ? error.message : String(error), true);
+        } finally {
+          void form;
+        }
+      }
+
+      $("new-button").addEventListener("click", openNewDialog);
+      $("new-cancel").addEventListener("click", () => $("new-dialog").close());
+      $("new-form").addEventListener("submit", createNewDocument);
+      $("save-button").addEventListener("click", saveDocument);
+      $("refresh-button").addEventListener("click", refreshFiles);
+      $("zoom-in").addEventListener("click", () => { state.zoom = Math.min(2.5, state.zoom + 0.1); renderDocument(); });
+      $("zoom-out").addEventListener("click", () => { state.zoom = Math.max(0.25, state.zoom - 0.1); renderDocument(); });
+      $("zoom-label").addEventListener("click", () => { state.zoom = 1; renderDocument(); });
+      $("fit-button").addEventListener("click", () => { state.zoom = 1; renderDocument(); });
+
+      bridge.on("appearance:changed", applyCopy);
+      bridge.on("workspace:changed", () => { if (confirmDiscard()) void loadWorkspace(); });
+      bridge.on("view:open", (payload) => { if (payload?.path && String(payload.path).toLowerCase().endsWith(".op")) void openDocument(String(payload.path)); });
+      bridge.invoke("app.getAppearance").then(applyCopy).catch(() => applyCopy(null));
+      const initialPath = new URL(window.location.href).searchParams.get("piViewOpen");
+      void loadWorkspace().then(() => { if (initialPath && initialPath.toLowerCase().endsWith(".op")) return openDocument(initialPath); });
+      applyCopy(null);
+    </script>
+  </body>
+</html>
