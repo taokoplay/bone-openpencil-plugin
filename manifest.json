@@ -2,17 +2,17 @@
   "schemaVersion": 1,
   "id": "bone.openpencil",
   "name": "Bone OpenPencil",
-  "version": "0.1.0",
-  "description": "Bone OpenPencil is a PI-Desktop port of ZSeven-W/dsh-openpencil for inspecting and editing OpenPencil .op design documents.",
+  "version": "0.2.0",
+  "description": "Bone OpenPencil is a PI-Desktop port of ZSeven-W/dsh-openpencil compatible with current OpenPencil v0.8.6 .op documents.",
   "i18n": {
     "en": {
       "name": "Bone OpenPencil",
-      "description": "A PI-Desktop port of ZSeven-W/dsh-openpencil for inspecting and editing OpenPencil .op design documents.",
+      "description": "A PI-Desktop port of ZSeven-W/dsh-openpencil compatible with current OpenPencil v0.8.6 .op documents.",
       "safetyNotes": "Ported from ZSeven-W/dsh-openpencil. Reads and writes only workspace-relative .op files through the declared fs scope; no network or external process is used."
     },
     "zh-CN": {
       "name": "Bone OpenPencil",
-      "description": "将 ZSeven-W/dsh-openpencil 移植到 PI-Desktop 的 Bone 插件，用于检查和编辑 OpenPencil .op 设计文档。",
+      "description": "将 ZSeven-W/dsh-openpencil 移植到 PI-Desktop，并兼容当前 OpenPencil v0.8.6 的 .op 文档。",
       "safetyNotes": "本插件移植自 ZSeven-W/dsh-openpencil；仅通过声明的文件权限读写工作区内的 .op 文件，不访问网络，也不启动外部进程。"
     }
   },

@@ -103,6 +103,7 @@
       .canvas-header { display: flex; align-items: center; gap: 10px; min-height: 42px; padding: 0 12px; border-bottom: 1px solid var(--border); }
       .document-title { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--fg); font-weight: 650; }
       .document-meta { color: var(--muted); white-space: nowrap; }
+      .page-select { max-width: 180px; min-width: 92px; padding: 4px 7px; border: 1px solid var(--border); border-radius: 6px; background: var(--surface-raised); color: var(--fg); }
       .dirty-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--accent); opacity: 0; }
       .dirty-dot.visible { opacity: 1; }
       .stage {
@@ -195,6 +196,7 @@
             <span class="dirty-dot" id="dirty-dot" aria-label="Unsaved changes"></span>
             <strong class="document-title" id="document-title">Bone OpenPencil Canvas</strong>
             <span class="document-meta" id="document-meta"></span>
+            <select class="page-select" id="page-select" aria-label="Pages" hidden></select>
           </div>
           <div class="stage" id="stage">
             <div class="canvas-empty" id="canvas-empty">
@@ -266,6 +268,7 @@
         document: null,
         summary: null,
         selectedNodeId: null,
+        pageIndex: 0,
         dirty: false,
         zoom: 1,
         locale: "en",
@@ -290,6 +293,7 @@
           appearance: "Appearance",
           document: "Document",
           frames: "Frames",
+          pages: "Pages",
           nodes: "Nodes",
           id: "ID",
           type: "Type",
@@ -330,6 +334,7 @@
           appearance: "外观",
           document: "文档",
           frames: "画板",
+          pages: "页面",
           nodes: "节点",
           id: "ID",
           type: "类型",
@@ -383,6 +388,7 @@
         $("stats-title").textContent = text("document");
         $("frames-label").textContent = text("frames");
         $("nodes-label").textContent = text("nodes");
+        $("page-select").setAttribute("aria-label", text("pages"));
         $("file-empty-title").textContent = text("noFiles");
         $("file-empty-body").textContent = text("noFilesBody");
         $("canvas-empty-title").textContent = text("choose");
@@ -441,6 +447,7 @@
             state.document = null;
             state.summary = null;
             state.selectedNodeId = null;
+            state.pageIndex = 0;
             state.dirty = false;
           }
           renderDocument();
@@ -477,6 +484,7 @@
           state.document = result.document;
           state.summary = result.summary;
           state.selectedNodeId = null;
+          state.pageIndex = 0;
           state.dirty = false;
           renderFiles();
           renderDocument();
@@ -558,17 +566,40 @@
         return group;
       }
 
+      function renderPageSelector() {
+        const select = $("page-select");
+        const pages = Array.isArray(state.document?.pages) ? state.document.pages : [];
+        select.replaceChildren();
+        if (pages.length === 0) {
+          select.hidden = true;
+          return;
+        }
+        state.pageIndex = Math.max(0, Math.min(state.pageIndex, pages.length - 1));
+        pages.forEach((page, index) => {
+          const option = document.createElement("option");
+          option.value = String(index);
+          option.textContent = page.name || `${text("pages")} ${index + 1}`;
+          select.append(option);
+        });
+        select.value = String(state.pageIndex);
+        select.hidden = pages.length <= 1;
+      }
+
       function renderDocument() {
         const canvas = $("canvas");
         const empty = $("canvas-empty");
         const stats = $("document-stats");
         $("document-title").textContent = state.path || text("choose");
-        $("document-meta").textContent = state.summary ? `${state.summary.frameCount} ${text("frames").toLowerCase()} · ${state.summary.nodeCount} ${text("nodes").toLowerCase()}` : "";
+        const pageCount = Number(state.summary?.pageCount) || 1;
+        $("document-meta").textContent = state.summary
+          ? `${state.summary.frameCount} ${text("frames").toLowerCase()} · ${state.summary.nodeCount} ${text("nodes").toLowerCase()}${pageCount > 1 ? ` · ${pageCount} ${text("pages").toLowerCase()}` : ""}`
+          : "";
         $("dirty-dot").classList.toggle("visible", state.dirty);
         $("save-button").disabled = !state.document || !state.dirty;
         empty.hidden = Boolean(state.document);
         canvas.hidden = !state.document;
         stats.hidden = !state.summary;
+        renderPageSelector();
         if (!state.document || !state.summary) {
           $("frames-value").textContent = "0";
           $("nodes-value").textContent = "0";
@@ -578,7 +609,8 @@
         $("frames-value").textContent = String(state.summary.frameCount);
         $("nodes-value").textContent = String(state.summary.nodeCount);
         canvas.replaceChildren();
-        const roots = Array.isArray(state.document.children) ? state.document.children : [];
+        const pages = Array.isArray(state.document.pages) && state.document.pages.length > 0 ? state.document.pages : null;
+        const roots = pages ? (Array.isArray(pages[state.pageIndex]?.children) ? pages[state.pageIndex].children : []) : (Array.isArray(state.document.children) ? state.document.children : []);
         const bounds = roots.map(nodeBounds);
         const minX = Math.min(0, ...bounds.map((item) => item.x));
         const minY = Math.min(0, ...bounds.map((item) => item.y));
@@ -599,7 +631,10 @@
 
       function findNode(documentValue, nodeId) {
         if (!documentValue || !nodeId) return null;
-        const queue = [...(Array.isArray(documentValue.children) ? documentValue.children : [])];
+        const pageRoots = Array.isArray(documentValue.pages) && documentValue.pages.length > 0
+          ? documentValue.pages.flatMap((page) => Array.isArray(page.children) ? page.children : [])
+          : (Array.isArray(documentValue.children) ? documentValue.children : []);
+        const queue = [...pageRoots];
         while (queue.length) {
           const node = queue.shift();
           if (node.id === nodeId) return node;
@@ -698,6 +733,11 @@
       $("zoom-out").addEventListener("click", () => { state.zoom = Math.max(0.25, state.zoom - 0.1); renderDocument(); });
       $("zoom-label").addEventListener("click", () => { state.zoom = 1; renderDocument(); });
       $("fit-button").addEventListener("click", () => { state.zoom = 1; renderDocument(); });
+      $("page-select").addEventListener("change", () => {
+        state.pageIndex = Number($("page-select").value) || 0;
+        state.selectedNodeId = null;
+        renderDocument();
+      });
 
       bridge.on("appearance:changed", applyCopy);
       bridge.on("workspace:changed", () => { if (confirmDiscard()) void loadWorkspace(); });

@@ -61,16 +61,52 @@ function generatedId(prefix, rawPath) {
   return `${prefix}-${rawPath.replace(/[^a-zA-Z0-9_-]/g, "-")}`.replace(/-+/g, "-").slice(0, 96);
 }
 
+function normalizePage(raw, rawPath) {
+  if (!isRecord(raw)) throw new Error(`page ${rawPath} must be an object`);
+  if (raw.children !== undefined && !Array.isArray(raw.children)) {
+    throw new Error(`page ${rawPath}.children must be an array`);
+  }
+  const children = Array.isArray(raw.children) ? raw.children : [];
+  return {
+    ...clone(raw),
+    id: boundedString(raw.id, generatedId("page", rawPath), "page id"),
+    name: boundedString(raw.name, "Page", "page name"),
+    children: children.map((child, index) => normalizeNode(child, `${rawPath}.${index}`)),
+  };
+}
+
+function rootCollections(document) {
+  if (Array.isArray(document.pages) && document.pages.length > 0) {
+    return document.pages.map((page, index) => ({
+      container: page,
+      pageIndex: index,
+      children: Array.isArray(page.children) ? page.children : [],
+    }));
+  }
+  return [{
+    container: document,
+    pageIndex: 0,
+    children: Array.isArray(document.children) ? document.children : [],
+  }];
+}
+
+function activeRootChildren(document, pageIndex = 0) {
+  const collections = rootCollections(document);
+  return collections[Math.max(0, Math.min(pageIndex, collections.length - 1))]?.children ?? [];
+}
+
 function walkNodes(document, visitor) {
   let count = 0;
-  const visit = (node, parent, index) => {
+  const visit = (node, parent, index, pageIndex) => {
     count += 1;
     if (count > MAX_NODES) throw new Error(`OpenPencil document exceeds the ${MAX_NODES} node limit`);
-    visitor(node, parent, index);
+    visitor(node, parent, index, pageIndex);
     if (!Array.isArray(node.children)) return;
-    node.children.forEach((child, childIndex) => visit(child, node, childIndex));
+    node.children.forEach((child, childIndex) => visit(child, node, childIndex, pageIndex));
   };
-  document.children.forEach((node, index) => visit(node, document, index));
+  for (const collection of rootCollections(document)) {
+    collection.children.forEach((node, index) => visit(node, collection.container, index, collection.pageIndex));
+  }
 }
 
 function normalizeNode(raw, rawPath) {
@@ -98,12 +134,18 @@ function normalizeDocument(value) {
   if (value.children !== undefined && !Array.isArray(value.children)) {
     throw new Error("OpenPencil document children must be an array");
   }
+  if (value.pages !== undefined && !Array.isArray(value.pages)) {
+    throw new Error("OpenPencil document pages must be an array");
+  }
   const children = Array.isArray(value.children) ? value.children : [];
   const document = {
     ...clone(value),
     version: boundedString(value.version, "1.0.0", "document version"),
     children: children.map((child, index) => normalizeNode(child, `children.${index}`)),
   };
+  if (Array.isArray(value.pages)) {
+    document.pages = value.pages.map((page, index) => normalizePage(page, `pages.${index}`));
+  }
   const ids = new Set();
   walkNodes(document, (node) => {
     if (ids.has(node.id)) throw new Error(`duplicate OpenPencil node id: ${node.id}`);
@@ -161,13 +203,15 @@ function findNodeLocation(document, nodeId) {
 function summaryOf(document) {
   const frames = [];
   let nodeCount = 0;
-  walkNodes(document, (node) => {
+  const roots = new Set(rootCollections(document).flatMap((collection) => collection.children));
+  walkNodes(document, (node, _parent, _index, pageIndex) => {
     nodeCount += 1;
-    if (document.children.includes(node)) {
+    if (roots.has(node)) {
       frames.push({
         id: node.id,
         name: node.name,
         type: node.type,
+        pageIndex,
         x: node.x,
         y: node.y,
         width: node.width,
@@ -177,6 +221,7 @@ function summaryOf(document) {
   });
   return {
     version: document.version,
+    pageCount: rootCollections(document).length,
     frameCount: frames.length,
     nodeCount,
     frames,
@@ -202,18 +247,23 @@ function createDocument(options = {}) {
   const fill = boundedString(options.fill, "#ffffff", "fill").trim() || "#ffffff";
   const id = generatedId("frame", `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`);
   return normalizeDocument({
-    version: "1.0.0",
-    children: [{
-      id,
-      type: "frame",
-      name,
-      x: 0,
-      y: 0,
-      width,
-      height,
-      fill: [{ type: "solid", color: fill }],
-      children: [],
+    version: "0.8.6",
+    pages: [{
+      id: generatedId("page", `${Date.now().toString(36)}-1`),
+      name: "Page 1",
+      children: [{
+        id,
+        type: "frame",
+        name,
+        x: 0,
+        y: 0,
+        width,
+        height,
+        fill: [{ type: "solid", color: fill }],
+        children: [],
+      }],
     }],
+    children: [],
   });
 }
 
@@ -247,8 +297,8 @@ function applyOperations(document, operations) {
       continue;
     }
     if (operation.op === "add") {
-      const parent = operation.parentId ? findNode(document, operation.parentId) : document;
-      if (!parent || (parent !== document && !CONTAINER_TYPES.has(parent.type))) throw new Error("add parent must be a container");
+      const parent = operation.parentId ? findNode(document, operation.parentId) : rootCollections(document)[0].container;
+      if (!parent || (parent !== document && !CONTAINER_TYPES.has(parent.type) && !Array.isArray(parent.children))) throw new Error("add parent must be a container");
       if (!Array.isArray(parent.children)) parent.children = [];
       const node = normalizeNode(operation.node, `added.${parent.children.length}`);
       if (findNode(document, node.id)) throw new Error(`node id already exists: ${node.id}`);

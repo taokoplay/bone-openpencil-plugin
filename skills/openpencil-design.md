@@ -5,9 +5,9 @@ description: Use when creating, inspecting, or editing OpenPencil .op design doc
 
 # Bone OpenPencil in PI-Desktop
 
-OpenPencil documents are JSON files with a `version` and top-level `children`. Each node has a stable `id`, a `type`, geometry, optional fills, and optional `children`.
+OpenPencil v0.8.6 documents are JSON files with a `version` and canonical `pages[].children`. Legacy files may use top-level `children`; Bone OpenPencil reads both forms. Each node has a stable `id`, a `type`, geometry, optional fills, and optional `children`.
 
-Use the PI-Desktop OpenPencil tools with a workspace-relative `.op` path:
+Use the Bone OpenPencil tools with a workspace-relative `.op` path. Inspect the page selected in the work panel before editing:
 
 - `openpencil_render` with `action: "inspect"` reads a document and returns bounded frame and node metadata.
 - `openpencil_selection` with `action: "inspect"` reads one node by id.

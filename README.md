@@ -9,7 +9,8 @@ repackages that design-document workflow for the PI-Desktop plugin runtime.
 - Display name: **Bone OpenPencil**
 - Ported plugin: **DSH OpenPencil** (`@zseven-w/dsh-openpencil`)
 - Upstream package line: `0.1.0-rc.15`
-- Upstream source commit: `5665008`
+- DSH source commit: `5665008`
+- OpenPencil compatibility target: `v0.8.6` (`c939f85`)
 - License: MIT; see [`LICENSE`](LICENSE)
 - Detailed provenance and compatibility notes: [`UPSTREAM.md`](UPSTREAM.md)
 - Migration design: [`docs/MIGRATION.md`](docs/MIGRATION.md)
@@ -17,9 +18,7 @@ repackages that design-document workflow for the PI-Desktop plugin runtime.
 ## What this plugin provides
 
 Bone OpenPencil adds a right-side **Bone OpenPencil Canvas** work-panel view.
-It lists workspace-relative `.op` files, renders frames and common nodes as a
-local SVG canvas, supports node selection and bounded property edits, and saves
-through PI-Desktop's host-gated `fs.writeText` API.
+It lists workspace-relative `.op` files, reads current canonical `pages[].children` documents and legacy top-level `children` documents, renders the selected page and common nodes as a local SVG canvas, supports node selection and bounded property edits, and saves through PI-Desktop's host-gated `fs.writeText` API.
 
 The Agent receives four tools:
 
@@ -35,8 +34,10 @@ command use the Bone namespace.
 
 ## How the port works
 
-The port keeps the upstream `.op` JSON document shape and design-oriented skill
-workflow. It replaces DSH-only Cordis services, conversation tool cards,
+The port follows the current OpenPencil `.op` JSON contract while retaining
+legacy top-level `children` compatibility. OpenPencil v0.8.6 uses canonical
+`pages[].children` data; unknown document and node fields are preserved during
+read/write. The port replaces DSH-only Cordis services, conversation tool cards,
 managed editor daemons, viewer asset routes, and native render binaries with
 PI-Desktop's public plugin APIs:
 
@@ -75,7 +76,7 @@ pnpm pi-plugin check /path/to/bone-openpencil-plugin
 pnpm pi-plugin pack /path/to/bone-openpencil-plugin
 ```
 
-The generated package is `dist/bone.openpencil-0.1.0.piplug`.
+The generated package is `dist/bone.openpencil-0.2.0.piplug`.
 
 The plugin has no npm runtime dependencies. Its direct runtime files are
 `manifest.json`, `main.js`, `document.js`, `views/index.html`, the skill,

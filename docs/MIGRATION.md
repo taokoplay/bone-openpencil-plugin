@@ -19,14 +19,18 @@ PI-Desktop Work Panel + Agent tools
 ```
 
 The direct source plugin is `ZSeven-W/dsh-openpencil`. OpenPencil is the
-related format/editor project that the source plugin drives.
+related format/editor project that the source plugin drives. Bone OpenPencil
+currently tracks OpenPencil `v0.8.6` at commit `c939f85` for the canonical
+`PenDocument` / `PenPage` schema.
 
 ## Porting decisions
 
 ### Kept
 
-- `.op` documents remain JSON documents with `version` and nested `children`.
-- Node ids, geometry, names, fills, and nested child relationships are kept.
+- `.op` documents remain JSON documents with `version`; current canonical files
+  use `pages[].children`, while legacy top-level `children` remains supported.
+- Node ids, geometry, names, fills, nested child relationships, page metadata,
+  and unknown fields are preserved.
 - Agent-facing tool intent remains recognizable through the `openpencil_*`
   names.
 - The design skill still recommends inspect-before-edit and preserving stable
@@ -40,7 +44,7 @@ related format/editor project that the source plugin drives.
 - DSH's host file service became `pi.workspace` plus `pi.fs` under manifest
   scopes.
 - The managed editor became an in-panel SVG renderer with node selection,
-  property editing, and explicit Save.
+  page selection, property editing, and explicit Save.
 - DSH's signed HTTP capability routes became plugin-owned `op.*` bridge
   channels, with the workspace identity checked before each operation.
 - DSH's runtime-specific dependency tree was removed; the plugin ships direct

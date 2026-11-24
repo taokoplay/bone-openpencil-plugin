@@ -15,14 +15,31 @@ This direct source relationship matters: Bone OpenPencil is a PI-Desktop port
 of `dsh-openpencil`, which itself is the DSH integration layer for OpenPencil.
 It is not presented as an official OpenPencil distribution.
 
+## Current compatibility source
+
+Bone OpenPencil follows the current OpenPencil canonical document contract at
+`v0.8.6`:
+
+- Current source commit: `c939f85`
+- Workspace version: `0.8.6`
+- Canonical loader: `op-pen-loader::load_canonical`
+- Canonical document model: `PenDocument` with optional `pages` and `PenPage.children`
+- Backward compatibility: legacy top-level `children` documents remain readable
+
+This update adds page-aware reading, editing, summaries, and page selection to
+Bone OpenPencil while preserving unknown document fields. The local SVG view
+remains a bounded preview and does not embed OpenPencil's Rust/WASM renderer.
+
 ## Related format/editor project
 
 The `.op` document format and editor concepts come from OpenPencil:
 
 - Repository: https://github.com/ZSeven-W/openpencil
 
-The OpenPencil repository is recorded as the related format/editor reference.
-The plugin being ported is `ZSeven-W/dsh-openpencil`.
+The OpenPencil repository is recorded as the related format/editor reference
+and current compatibility source. The plugin being ported is still
+`ZSeven-W/dsh-openpencil`; its DSH package version is not the same thing as
+the OpenPencil editor version tracked above.
 
 ## What was reused
 
